@@ -1,173 +1,176 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import UploadZone from './components/UploadZone';
-import ResultCard from './components/ResultCard';
 import LoadingSpinner from './components/LoadingSpinner';
-import { analyzeImage } from './services/geminiService';
-import { AnalysisState, AnalysisStatus } from './types';
+import DetectionOverlay from './components/DetectionOverlay';
+import { detectHelmets, DetectionResponse, Detection } from './services/yoloService';
 
 const App: React.FC = () => {
-  const [state, setState] = useState<AnalysisState>({
-    status: AnalysisStatus.IDLE,
-    result: null,
-    error: null,
-    imagePreview: null,
-  });
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [results, setResults] = useState<DetectionResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const updateSize = () => {
+      if (imageRef.current) {
+        setContainerSize({
+          width: imageRef.current.clientWidth,
+          height: imageRef.current.clientHeight,
+        });
+      }
+    };
+
+    window.addEventListener('resize', updateSize);
+    updateSize();
+    return () => window.removeEventListener('resize', updateSize);
+  }, [previewUrl, results]);
 
   const handleImageSelected = async (file: File) => {
-    // Create local preview
-    const objectUrl = URL.createObjectURL(file);
-    
-    setState({
-      status: AnalysisStatus.ANALYZING,
-      result: null,
-      error: null,
-      imagePreview: objectUrl,
-    });
+    setSelectedImage(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setResults(null);
+    setError(null);
+    setIsAnalyzing(true);
 
     try {
-      // Call Analysis Service (OpenRouter -> Gemini)
-      const result = await analyzeImage(file);
-      
-      setState(prev => ({
-        ...prev,
-        status: AnalysisStatus.SUCCESS,
-        result: result,
-      }));
+      const data = await detectHelmets(file);
+      setResults(data);
     } catch (err: any) {
-      setState(prev => ({
-        ...prev,
-        status: AnalysisStatus.ERROR,
-        error: err.message || "Failed to analyze image. Please try again.",
-      }));
+      setError(err.message || 'An error occurred during analysis');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
-  const resetAnalysis = () => {
-    if (state.imagePreview) {
-      URL.revokeObjectURL(state.imagePreview);
-    }
-    setState({
-      status: AnalysisStatus.IDLE,
-      result: null,
-      error: null,
-      imagePreview: null,
-    });
+  const reset = () => {
+    setSelectedImage(null);
+    setPreviewUrl(null);
+    setResults(null);
+    setError(null);
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
-      
-      {/* Header */}
-      <header className="bg-slate-900/50 backdrop-blur-md border-b border-white/5 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-              </svg>
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Vision<span className="text-indigo-500">Analytica</span></h1>
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-indigo-500/30">
+      {/* Background decoration */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full"></div>
+        <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full"></div>
+      </div>
+
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-12">
+        <header className="mb-16 text-center">
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-sm font-medium mb-4">
+            <span className="relative flex h-2 w-2 mr-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+            Powered by YOLOv11
           </div>
-          <div className="flex items-center space-x-4">
-             <span className="text-xs font-medium px-2 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-md">
-               AI Powered
-             </span>
-             <a href="#" className="text-sm font-medium text-slate-400 hover:text-indigo-400 transition-colors">Documentation</a>
-          </div>
-        </div>
-      </header>
+          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-6 bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
+            VisionAnalytica
+          </h1>
+          <p className="text-lg text-slate-400 max-w-2xl mx-auto">
+            Real-time industrial safety analysis. Upload an image to detect safety helmets and personal protective equipment.
+          </p>
+        </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Column: Upload & Preview */}
-          <div className="lg:col-span-7 space-y-6">
-            
-            {/* Intro Text */}
-            <div className="mb-6">
-              <h2 className="text-3xl font-bold text-white mb-3">AI Vision Analysis</h2>
-              <p className="text-slate-400 text-lg leading-relaxed">
-                Upload an image to detect objects, count people, and check for safety compliance instantly using Gemini and advanced vision models.
-              </p>
+        <main className="space-y-8">
+          {!previewUrl ? (
+            <div className="max-w-2xl mx-auto">
+              <UploadZone onImageSelected={handleImageSelected} />
             </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="bg-slate-900 rounded-3xl p-4 border border-white/5 shadow-2xl relative overflow-hidden group">
+                <div className="relative aspect-auto max-h-[70vh] flex items-center justify-center bg-black/20 rounded-2xl overflow-hidden">
+                  <img
+                    ref={imageRef}
+                    src={previewUrl}
+                    alt="Preview"
+                    className="max-w-full max-h-full object-contain"
+                    onLoad={() => {
+                      if (imageRef.current) {
+                        setContainerSize({
+                          width: imageRef.current.clientWidth,
+                          height: imageRef.current.clientHeight,
+                        });
+                      }
+                    }}
+                  />
+                  
+                  {results && containerSize.width > 0 && (
+                    <DetectionOverlay
+                      detections={results.detections}
+                      imageWidth={results.image_size.width}
+                      imageHeight={results.image_size.height}
+                      containerWidth={containerSize.width}
+                      containerHeight={containerSize.height}
+                    />
+                  )}
 
-            {/* Upload Area */}
-            {state.status === AnalysisStatus.IDLE && (
-               <UploadZone onImageSelected={handleImageSelected} />
-            )}
+                  {isAnalyzing && (
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center">
+                      <LoadingSpinner />
+                      <p className="mt-4 text-indigo-300 font-medium animate-pulse">Running YOLOv11 Inference...</p>
+                    </div>
+                  )}
+                </div>
 
-            {/* Image Preview */}
-            {state.imagePreview && (
-              <div className="relative group rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 bg-slate-900">
-                <img 
-                  src={state.imagePreview} 
-                  alt="Preview" 
-                  className="w-full h-auto max-h-[500px] object-contain opacity-90 group-hover:opacity-100 transition-opacity" 
-                />
-                
-                {state.status !== AnalysisStatus.ANALYZING && (
-                  <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-950 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex justify-center">
-                    <button 
-                      onClick={resetAnalysis}
-                      className="bg-white text-slate-950 px-4 py-2 rounded-lg font-medium shadow-lg hover:bg-slate-100 transition-colors text-sm"
+                <div className="mt-6 flex items-center justify-between px-2">
+                  <div className="flex gap-4">
+                    <button
+                      onClick={reset}
+                      className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-medium transition-all border border-white/10"
                     >
-                      Analyze Another Image
+                      New Analysis
                     </button>
                   </div>
-                )}
-              </div>
-            )}
-
-             {/* Error Message */}
-             {state.status === AnalysisStatus.ERROR && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start space-x-3">
-                <svg className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <div className="flex-1">
-                  <h3 className="text-sm font-medium text-red-300">Analysis Failed</h3>
-                  <p className="text-sm text-red-400/80 mt-1">{state.error}</p>
-                  <button 
-                    onClick={() => setState(prev => ({ ...prev, status: AnalysisStatus.IDLE, error: null }))}
-                    className="text-sm text-red-400 font-medium hover:text-red-300 hover:underline mt-2"
-                  >
-                    Try again
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Results */}
-          <div className="lg:col-span-5">
-            <div className="sticky top-24">
-              {state.status === AnalysisStatus.IDLE && (
-                 <div className="bg-slate-900/50 rounded-2xl border border-dashed border-white/10 p-8 text-center h-full flex flex-col items-center justify-center min-h-[300px]">
-                    <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                      <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                      </svg>
+                  
+                  {results && (
+                    <div className="text-right">
+                      <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">Detection Summary</p>
+                      <p className="text-white font-medium">
+                        {results.detections.length} Probable Objects Detected
+                      </p>
                     </div>
-                    <p className="text-slate-300 font-medium">Results will appear here</p>
-                    <p className="text-slate-500 text-sm mt-1">Upload an image to start analysis</p>
-                 </div>
-              )}
+                  )}
+                </div>
+              </div>
 
-              {state.status === AnalysisStatus.ANALYZING && (
-                <div className="bg-slate-900 rounded-2xl shadow-2xl shadow-black/50 border border-white/5 p-8 min-h-[300px] flex items-center justify-center">
-                  <LoadingSpinner />
+              {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-center animate-in shake duration-500">
+                  {error}
                 </div>
               )}
-
-              {state.status === AnalysisStatus.SUCCESS && state.result && (
-                <ResultCard result={state.result} />
+              
+              {results && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {results.detections.map((det, i) => (
+                    <div key={i} className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-slate-500 uppercase font-bold tracking-tighter">Object</span>
+                        <p className="text-white font-semibold capitalize">{det.label}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-slate-500 uppercase font-bold tracking-tighter">Confidence</span>
+                        <p className="text-indigo-400 font-mono font-bold">{Math.round(det.confidence * 100)}%</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          </div>
+          )}
+        </main>
 
-        </div>
-      </main>
+        <footer className="mt-24 text-center text-slate-600 text-sm">
+          <p>© 2024 VisionAnalytica AI. All Rights Reserved.</p>
+        </footer>
+      </div>
     </div>
   );
 };

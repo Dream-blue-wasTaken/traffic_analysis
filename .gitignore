@@ -50,3 +50,4 @@ pnpm-debug.log*
 .idea/
 *.swp
 *.swo
+implementation_plan.md.resolved
