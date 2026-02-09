@@ -1,0 +1,5 @@
+{
+  "name": "VisionAnalytica",
+  "description": "A powerful AI-driven image analysis tool that detects objects, counts people, and identifies safety gear usage in real-time using Gemini 3 Flash.",
+  "requestFramePermissions": []
+}
