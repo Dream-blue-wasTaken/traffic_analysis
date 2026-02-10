@@ -56,3 +56,6 @@ weights/
 backend/*.pt
 *.pt
 downloads/
+
+# Misc
+check_env.py
