@@ -37,8 +37,8 @@ const DetectionOverlay: React.FC<DetectionOverlayProps> = ({
         const left = x1 * scaleX;
         const top = y1 * scaleY;
 
-        const isHelmet = det.label.toLowerCase().includes('helmet');
-        const color = isHelmet ? '#10b981' : '#ef4444'; // Green for helmet, Red otherwise
+        const isNoHelmet = det.label.toLowerCase().includes('without');
+        const color = isNoHelmet ? '#ef4444' : '#10b981'; // Red for 'Without Helmet', Green otherwise
 
         return (
           <div

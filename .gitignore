@@ -51,3 +51,6 @@ pnpm-debug.log*
 *.swp
 *.swo
 implementation_plan.md.resolved
+weights
+*.pt 
+*.pt.*
