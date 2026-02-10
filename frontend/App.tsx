@@ -86,38 +86,40 @@ const App: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="bg-slate-900 rounded-3xl p-4 border border-white/5 shadow-2xl relative overflow-hidden group">
-                <div className="relative aspect-auto max-h-[70vh] flex items-center justify-center bg-black/20 rounded-2xl overflow-hidden">
-                  <img
-                    ref={imageRef}
-                    src={previewUrl}
-                    alt="Preview"
-                    className="max-w-full max-h-full object-contain"
-                    onLoad={() => {
-                      if (imageRef.current) {
-                        setContainerSize({
-                          width: imageRef.current.clientWidth,
-                          height: imageRef.current.clientHeight,
-                        });
-                      }
-                    }}
-                  />
-                  
-                  {results && containerSize.width > 0 && (
-                    <DetectionOverlay
-                      detections={results.detections}
-                      imageWidth={results.image_size.width}
-                      imageHeight={results.image_size.height}
-                      containerWidth={containerSize.width}
-                      containerHeight={containerSize.height}
+                <div className="relative aspect-auto max-h-[70vh] flex items-center justify-center bg-black/20 rounded-2xl overflow-hidden p-1">
+                  <div className="relative inline-block">
+                    <img
+                      ref={imageRef}
+                      src={previewUrl}
+                      alt="Preview"
+                      className="max-w-full max-h-[68vh] block rounded-xl shadow-lg"
+                      onLoad={() => {
+                        if (imageRef.current) {
+                          setContainerSize({
+                            width: imageRef.current.clientWidth,
+                            height: imageRef.current.clientHeight,
+                          });
+                        }
+                      }}
                     />
-                  )}
+                    
+                    {results && containerSize.width > 0 && (
+                      <DetectionOverlay
+                        detections={results.detections}
+                        imageWidth={results.image_size.width}
+                        imageHeight={results.image_size.height}
+                        containerWidth={containerSize.width}
+                        containerHeight={containerSize.height}
+                      />
+                    )}
 
-                  {isAnalyzing && (
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center">
-                      <LoadingSpinner />
-                      <p className="mt-4 text-indigo-300 font-medium animate-pulse">Running YOLOv11 Inference...</p>
-                    </div>
-                  )}
+                    {isAnalyzing && (
+                      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center">
+                        <LoadingSpinner />
+                        <p className="mt-4 text-indigo-300 font-medium animate-pulse">Analyzing...</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-6 flex items-center justify-between px-2">

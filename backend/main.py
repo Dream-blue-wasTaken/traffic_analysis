@@ -37,12 +37,19 @@ async def detect_helmets(file: UploadFile = File(...)):
     try:
         # Read image
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert("RGB")
+        image = Image.open(io.BytesIO(contents))
+        
+        # Handle EXIF orientation
+        from PIL import ImageOps
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        
         img_np = np.array(image)
         h_orig, w_orig = img_np.shape[:2]
+        print(f"📸 Processing image: {w_orig}x{h_orig}")
 
-        # --- STAGE 1: Detect Persons and Motorcycles (COCO classes: 0=person, 3=motorcycle) ---
-        base_results = base_model(img_np, conf=0.3, imgsz=640)[0]
+        # --- STAGE 1: Detect Persons and Motorcycles ---
+        # Lower confidence to 0.25 for better recall on small people
+        base_results = base_model(img_np, conf=0.25, imgsz=640)[0]
         
         persons = []
         motorcycles = []
@@ -52,27 +59,28 @@ async def detect_helmets(file: UploadFile = File(...)):
             if cls == 0: persons.append(box.xyxy[0].tolist())
             elif cls == 3: motorcycles.append(box.xyxy[0].tolist())
 
+        print(f"🔍 Stage 1: Found {len(persons)} persons and {len(motorcycles)} motorcycles")
+
         # --- STAGE 2: Rider Matching & Cropping ---
-        # We'll focus on people who are likely riders or near bikes
         all_detections = []
         
-        for p_box in persons:
+        for i, p_box in enumerate(persons):
             px1, py1, px2, py2 = p_box
             p_w = px2 - px1
             p_h = py2 - py1
             
-            # Crop the "Head/Shoulder" area (top 40% of the person box)
-            # We add a bit of padding to ensure the whole helmet fits
-            cx1 = max(0, int(px1 - p_w * 0.1))
-            cy1 = max(0, int(py1 - p_h * 0.1))
-            cx2 = min(w_orig, int(px2 + p_w * 0.1))
-            cy2 = min(h_orig, int(py1 + p_h * 0.5)) # Crop upper half
+            # Crop the head/shoulder area with slightly more padding (15%)
+            cx1 = max(0, int(px1 - p_w * 0.15))
+            cy1 = max(0, int(py1 - p_h * 0.15))
+            cx2 = min(w_orig, int(px2 + p_w * 0.15))
+            cy2 = min(h_orig, int(py1 + p_h * 0.6)) # Up to 60% of height
             
             crop = img_np[cy1:cy2, cx1:cx2]
             if crop.size == 0: continue
 
             # --- STAGE 3: Specialized Helmet Detection on Crop ---
-            h_results = helmet_model(crop, conf=0.2, imgsz=320)[0]
+            # Use lower conf for the specialized model
+            h_results = helmet_model(crop, conf=0.15, imgsz=320)[0]
             
             for h_box in h_results.boxes:
                 hx1, hy1, hx2, hy2 = h_box.xyxy[0].tolist()
@@ -80,7 +88,7 @@ async def detect_helmets(file: UploadFile = File(...)):
                 cls_id = int(h_box.cls[0])
                 label = helmet_model.names[cls_id]
 
-                # Map back to original coordinates
+                # Map back to original relative coordinates
                 final_box = [
                     hx1 + cx1,
                     hy1 + cy1,
@@ -95,8 +103,11 @@ async def detect_helmets(file: UploadFile = File(...)):
                     "class_id": cls_id
                 })
 
+        detections = apply_nms(all_detections, iou_threshold=0.45)
+        print(f"🎯 State 3: Final detections after NMS: {len(detections)}")
+
         return {
-            "detections": apply_nms(all_detections, iou_threshold=0.45),
+            "detections": detections,
             "image_size": {
                 "width": w_orig,
                 "height": h_orig

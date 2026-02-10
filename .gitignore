@@ -51,6 +51,8 @@ pnpm-debug.log*
 *.swp
 *.swo
 implementation_plan.md.resolved
-weights
-*.pt 
-*.pt.*
+# Models and Weights
+weights/
+backend/*.pt
+*.pt
+downloads/
