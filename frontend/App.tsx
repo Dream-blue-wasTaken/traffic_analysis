@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import UploadZone from './components/UploadZone';
 import LoadingSpinner from './components/LoadingSpinner';
 import DetectionOverlay from './components/DetectionOverlay';
-import { detectHelmets, DetectionResponse, Detection } from './services/yoloService';
+import { detectHelmets, DetectionResponse, Violation } from './services/yoloService';
 
 const App: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -10,7 +10,7 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<DetectionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   const imageRef = useRef<HTMLImageElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
@@ -53,6 +53,10 @@ const App: React.FC = () => {
     setError(null);
   };
 
+  const noHelmetCount = results?.violations.filter(v => v.type === 'no_helmet').length || 0;
+  const tripleRidingCount = results?.violations.filter(v => v.type === 'triple_riding').length || 0;
+  const totalViolations = noHelmetCount + tripleRidingCount;
+
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-indigo-500/30">
       {/* Background decoration */}
@@ -74,7 +78,7 @@ const App: React.FC = () => {
             VisionAnalytica
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Real-time industrial safety analysis. Upload an image to detect safety helmets and personal protective equipment.
+            Real-time traffic violation detection. Upload an image to detect helmet violations and triple-riding on motorcycles.
           </p>
         </header>
 
@@ -102,10 +106,13 @@ const App: React.FC = () => {
                         }
                       }}
                     />
-                    
+
                     {results && containerSize.width > 0 && (
                       <DetectionOverlay
                         detections={results.detections}
+                        persons={results.persons}
+                        motorcycles={results.motorcycles}
+                        violations={results.violations}
                         imageWidth={results.image_size.width}
                         imageHeight={results.image_size.height}
                         containerWidth={containerSize.width}
@@ -131,12 +138,12 @@ const App: React.FC = () => {
                       New Analysis
                     </button>
                   </div>
-                  
+
                   {results && (
                     <div className="text-right">
                       <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">Detection Summary</p>
                       <p className="text-white font-medium">
-                        {results.detections.length} Probable Objects Detected
+                        {results.persons?.length || 0} Persons · {results.motorcycles?.length || 0} Motorcycles
                       </p>
                     </div>
                   )}
@@ -148,18 +155,122 @@ const App: React.FC = () => {
                   {error}
                 </div>
               )}
-              
-              {results && (
+
+              {/* ── Violations Panel ── */}
+              {results && results.violations && results.violations.length > 0 && (
+                <div className="bg-slate-900/80 border border-red-500/20 rounded-3xl p-6 shadow-2xl">
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-xl">
+                      🚨
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-white">
+                        {totalViolations} Violation{totalViolations !== 1 ? 's' : ''} Detected
+                      </h2>
+                      <p className="text-sm text-slate-400">Traffic safety violations found in this image</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {noHelmetCount > 0 && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex items-start gap-3">
+                        <div className="text-2xl mt-0.5">🪖</div>
+                        <div>
+                          <p className="text-red-400 font-bold text-lg">{noHelmetCount}× No Helmet</p>
+                          <p className="text-slate-400 text-sm mt-1">
+                            {noHelmetCount} rider{noHelmetCount !== 1 ? 's' : ''} detected without helmet on motorcycle
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {tripleRidingCount > 0 && (
+                      <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 flex items-start gap-3">
+                        <div className="text-2xl mt-0.5">🏍️</div>
+                        <div>
+                          <p className="text-orange-400 font-bold text-lg">{tripleRidingCount}× Triple Riding</p>
+                          <p className="text-slate-400 text-sm mt-1">
+                            More than 2 persons detected on {tripleRidingCount} motorcycle{tripleRidingCount !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Individual violation details */}
+                  <div className="mt-4 space-y-2">
+                    {results.violations.map((v: Violation, i: number) => (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${v.type === 'no_helmet'
+                            ? 'bg-red-500/5 border-red-500/10'
+                            : 'bg-orange-500/5 border-orange-500/10'
+                          }`}
+                      >
+                        <span className="text-lg">{v.type === 'no_helmet' ? '❌' : '⚠️'}</span>
+                        <span className={`font-medium ${v.type === 'no_helmet' ? 'text-red-300' : 'text-orange-300'
+                          }`}>
+                          {v.description}
+                        </span>
+                        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${v.severity === 'high'
+                            ? 'bg-red-500/20 text-red-400'
+                            : 'bg-yellow-500/20 text-yellow-400'
+                          }`}>
+                          {v.severity}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── No Violations ── */}
+              {results && results.violations && results.violations.length === 0 && results.persons && results.persons.length > 0 && (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-6 text-center">
+                  <div className="text-4xl mb-2">✅</div>
+                  <h2 className="text-xl font-bold text-emerald-400">No Violations Detected</h2>
+                  <p className="text-slate-400 text-sm mt-1">All detected persons appear to be following traffic safety rules</p>
+                </div>
+              )}
+
+              {/* ── Detection Details Grid ── */}
+              {results && results.persons && results.persons.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {results.detections.map((det, i) => (
-                    <div key={i} className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl flex items-center justify-between">
+                  {results.persons.map((person) => (
+                    <div key={`p-${person.id}`} className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl flex items-center justify-between">
                       <div>
-                        <span className="text-xs text-slate-500 uppercase font-bold tracking-tighter">Object</span>
-                        <p className="text-white font-semibold capitalize">{det.label}</p>
+                        <span className="text-xs text-slate-500 uppercase font-bold tracking-tighter">
+                          {person.on_motorcycle ? 'Rider' : 'Person'}
+                        </span>
+                        <p className={`font-semibold capitalize ${person.helmet_status === 'helmet'
+                            ? 'text-emerald-400'
+                            : person.helmet_status === 'no_helmet'
+                              ? 'text-red-400'
+                              : 'text-slate-300'
+                          }`}>
+                          {person.helmet_status === 'helmet' ? '✅ Helmet' :
+                            person.helmet_status === 'no_helmet' ? '❌ No Helmet' :
+                              '⚠️ Unknown'}
+                        </p>
                       </div>
                       <div className="text-right">
                         <span className="text-xs text-slate-500 uppercase font-bold tracking-tighter">Confidence</span>
-                        <p className="text-indigo-400 font-mono font-bold">{Math.round(det.confidence * 100)}%</p>
+                        <p className="text-indigo-400 font-mono font-bold">{Math.round(person.confidence * 100)}%</p>
+                      </div>
+                    </div>
+                  ))}
+                  {results.motorcycles && results.motorcycles.map((moto) => (
+                    <div key={`m-${moto.id}`} className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl flex items-center justify-between">
+                      <div>
+                        <span className="text-xs text-slate-500 uppercase font-bold tracking-tighter">Motorcycle</span>
+                        <p className={`font-semibold ${moto.rider_count > 2 ? 'text-orange-400' : 'text-blue-400'
+                          }`}>
+                          🏍️ {moto.rider_count} Rider{moto.rider_count !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-slate-500 uppercase font-bold tracking-tighter">Confidence</span>
+                        <p className="text-indigo-400 font-mono font-bold">{Math.round(moto.confidence * 100)}%</p>
                       </div>
                     </div>
                   ))}

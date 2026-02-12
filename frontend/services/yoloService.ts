@@ -3,10 +3,44 @@ export interface Detection {
   confidence: number;
   label: string;
   class_id: number;
+  person_id?: number;
+}
+
+export interface PersonDetection {
+  id: number;
+  box: [number, number, number, number];
+  confidence: number;
+  helmet_status: 'helmet' | 'no_helmet' | 'unknown';
+  on_motorcycle: boolean;
+  motorcycle_id: number | null;
+}
+
+export interface MotorcycleDetection {
+  id: number;
+  box: [number, number, number, number];
+  confidence: number;
+  rider_count: number;
+  rider_ids: number[];
+}
+
+export interface Violation {
+  type: 'no_helmet' | 'triple_riding';
+  severity: string;
+  description: string;
+  person_box?: [number, number, number, number];
+  motorcycle_box: [number, number, number, number];
+  person_id?: number;
+  motorcycle_id: number;
+  rider_count?: number;
+  person_boxes?: [number, number, number, number][];
+  person_ids?: number[];
 }
 
 export interface DetectionResponse {
   detections: Detection[];
+  persons: PersonDetection[];
+  motorcycles: MotorcycleDetection[];
+  violations: Violation[];
   image_size: {
     width: number;
     height: number;
